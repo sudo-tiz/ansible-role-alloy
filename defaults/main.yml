@@ -18,7 +18,7 @@ alloy_config_path: "{{ alloy_base_path }}/config"
 alloy_data_path: "{{ alloy_base_path }}/data"
 
 # renovate: datasource=docker depName=grafana/alloy versioning=semver
-alloy_version: 1.18.0
+alloy_version: 1.18.1
 
 alloy_uid: ""
 alloy_gid: ""
