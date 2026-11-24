@@ -127,6 +127,11 @@ alloy_container_extra_arguments: "{{ alloy_container_extra_arguments_auto + allo
 alloy_container_extra_arguments_auto: []
 alloy_container_extra_arguments_custom: []
 
+# A list of extra arguments to pass to the process inside the container.
+alloy_process_extra_arguments: "{{ alloy_process_extra_arguments_auto + alloy_process_extra_arguments_custom }}"
+alloy_process_extra_arguments_auto: []
+alloy_process_extra_arguments_custom: []
+
 # List of systemd services that the Alloy systemd service depends on
 alloy_systemd_required_services_list: "{{ alloy_systemd_required_services_list_default + alloy_systemd_required_services_list_auto + alloy_systemd_required_services_list_custom }}"
 alloy_systemd_required_services_list_default: "{{ [devture_systemd_docker_base_docker_service_name] if devture_systemd_docker_base_docker_service_name else [] }}"
@@ -232,15 +237,6 @@ alloy_config_logging_level: info
 # Controls the log format of Alloy's own logs (not the logs it collects).
 # One of: logfmt, json.
 alloy_config_logging_format: logfmt
-
-# A list of extra arguments to pass to the `alloy run` command (as opposed to `alloy_container_extra_arguments`,
-# which passes extra arguments to the `docker create` command).
-#
-# Example: alloy_process_extra_arguments_custom: ["--stability.level=public-preview"]
-alloy_process_extra_arguments: "{{ alloy_process_extra_arguments_default + alloy_process_extra_arguments_auto + alloy_process_extra_arguments_custom }}"
-alloy_process_extra_arguments_default: []
-alloy_process_extra_arguments_auto: []
-alloy_process_extra_arguments_custom: []
 
 # Specify the timezone
 alloy_environment_variables_tz: UTC
@@ -388,7 +384,7 @@ alloy_varlog_scraper_container_additional_volumes:
 
 alloy_varlog_scraper_config_labels_path: "{{ alloy_varlog_scraper_in_container_path }}{{ alloy_varlog_scraper_config_labels_path_suffix }}"
 alloy_varlog_scraper_config_labels_path_suffix: /**/*log
-alloy_varlog_scraper_config_exclude_path: "{{ alloy_varlog_scraper_in_container_path }}/**/{faillog,lastlog}"
+alloy_varlog_scraper_config_labels_path_exclude: "{{ alloy_varlog_scraper_in_container_path }}/**/{faillog,lastlog}"
 alloy_varlog_scraper_config_labels_job: varlog
 alloy_varlog_scraper_config_labels_host: "{{ inventory_hostname }}"
 
@@ -404,7 +400,7 @@ alloy_varlog_scraper_config_sync_period: 10s
 # Each item supports the following keys:
 # - name: a unique Alloy identifier for this scraper
 # - path: the in-container glob path to scan (e.g. `{{ alloy_varlog_scraper_in_container_path }}/nginx/*.log`)
-# - exclude_path: optional in-container glob for paths to exclude (defaults to excluding `lastlog` and `faillog`)
+# - path_exclude: optional in-container glob for paths to exclude (defaults to excluding `lastlog` and `faillog`)
 # - labels: a dictionary of static labels to attach (e.g. `{job: "nginx", host: "{{ inventory_hostname }}"}`)
 # - sync_period: how often to re-sync the filesystem for this scraper
 # - forward_to: a list of raw Alloy component reference expressions to forward log entries to
@@ -424,7 +420,7 @@ alloy_varlog_scrapers_default: |
     ([{
       'name': 'varlog',
       'path': alloy_varlog_scraper_config_labels_path,
-      'exclude_path': alloy_varlog_scraper_config_exclude_path,
+      'path_exclude': alloy_varlog_scraper_config_labels_path_exclude,
       'labels': {'job': alloy_varlog_scraper_config_labels_job, 'host': alloy_varlog_scraper_config_labels_host},
       'sync_period': alloy_varlog_scraper_config_sync_period,
       'forward_to': ['loki.write.default.receiver'],

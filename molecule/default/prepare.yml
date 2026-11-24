@@ -1,57 +1,78 @@
 # SPDX-FileCopyrightText: 2026 Slavi Pantaleev
-# SPDX-FileCopyrightText: 2026 sudo-Tiz
+# SPDX-FileCopyrightText: 2026 spatterlight
+# SPDX-FileCopyrightText: 2026 Suguru Hirahara
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 ---
-- name: Prepare Alloy Molecule test
+- name: Prepare Alloy Molecule tests
   hosts: all
   become: true
   gather_facts: true
   tasks:
-    - name: Update apt cache
+    - name: Ensure apt cache is updated for Alloy Molecule tests preparation
       ansible.builtin.apt:
         update_cache: true
         cache_valid_time: 600
-      when: ansible_facts['os_family'] == 'Debian'
+      when: ansible_facts["os_family"] == 'Debian'
 
-    - name: Install Docker Python dependencies
+    - name: Ensure required packages are installed for Alloy Molecule tests preparation
       ansible.builtin.package:
         name:
-          - python3-docker
           - python3-requests
         state: present
 
-    - name: Install Docker
+    - name: Ensure Docker is installed for Alloy Molecule tests preparation
       ansible.builtin.include_role:
         name: ansible-role-docker
 
-    - name: Create the seeded log directory
+    # The log file that Alloy is pointed at. It is seeded before the role
+    # runs, so that the line is already waiting when Alloy first opens the
+    # file. Alloy starts a new file from the beginning when its positions
+    # file holds no offset for it, and stamps what it reads with the time it
+    # read it, so a line written here still arrives at Loki as a current one.
+    #
+    # It is world-readable because the container reads it through a read-only
+    # bind mount, and this scenario leaves the role at its default of running
+    # the container as root.
+    - name: Ensure the seeded log directory exists for Alloy Molecule tests
       ansible.builtin.file:
         path: "{{ alloy_molecule_log_host_path }}"
         state: directory
         mode: "0755"
 
-    - name: Seed the log file
+    - name: Ensure the seeded log file exists for Alloy Molecule tests
       ansible.builtin.copy:
         dest: "{{ alloy_molecule_log_host_path }}/{{ alloy_molecule_log_filename }}"
         content: "{{ alloy_molecule_log_line }} written by prepare.yml\n"
         mode: "0644"
 
-    - name: Create the Loki sink network
+    # Alloy reaches its Loki by container name, so the two need a network in
+    # common. The role attaches to this one through
+    # `alloy_container_additional_networks_custom` and does not create it -
+    # by design, that knob is for networks that already exist.
+    #
+    # `docker` is driven through the CLI rather than through community.docker,
+    # because the linting environment in CI has no collections installed.
+    - name: Ensure the Loki sink network exists for Alloy Molecule tests
       ansible.builtin.command:
         cmd: "docker network create {{ alloy_molecule_network_name }}"
-      register: alloy_molecule_network
-      changed_when: alloy_molecule_network.rc == 0
-      failed_when: alloy_molecule_network.rc != 0 and 'already exists' not in alloy_molecule_network.stderr
+      register: alloy_molecule_network_result
+      changed_when: alloy_molecule_network_result.rc == 0
+      failed_when: >-
+        alloy_molecule_network_result.rc != 0
+        and 'already exists' not in alloy_molecule_network_result.stderr
 
-    - name: Remove a previous Loki container
+    - name: Ensure a previous Loki sink is gone for Alloy Molecule tests
       ansible.builtin.command:
         cmd: "docker rm --force {{ alloy_molecule_loki_container_name }}"
       changed_when: false
       failed_when: false
 
-    - name: Start Loki sink
+    # A stock Loki needs no configuration of ours: the image ships a
+    # single-binary configuration backed by local filesystem storage, which is
+    # all that accepting a push and answering a query back needs.
+    - name: Ensure the Loki sink is running for Alloy Molecule tests
       ansible.builtin.command:
         cmd: >-
           docker run -d
@@ -61,7 +82,11 @@
           {{ alloy_molecule_loki_container_image }}
       changed_when: true
 
-    - name: Wait for Loki readiness
+    # Alloy retries a failed push with a backoff that grows to minutes, so a
+    # Loki that is not listening by the time Alloy first ships can delay
+    # delivery well past the point where verify.yml gives up. Waiting for
+    # readiness here keeps that out of the verification.
+    - name: Wait for the Loki sink to become ready for Alloy Molecule tests (up to 5m)
       ansible.builtin.uri:
         url: "http://127.0.0.1:{{ alloy_molecule_loki_bind_port }}/ready"
         method: GET

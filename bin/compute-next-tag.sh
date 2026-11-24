@@ -11,8 +11,8 @@
 # Tags look like `v<Alloy version>-<release>`:
 #
 # - if defaults/main.yml points at an Alloy version that has never been
-#   released, the release counter restarts at 0 (`v13.0.2-0`)
-# - otherwise the counter is incremented (`v13.0.2-1`), but only if something
+#   released, the release counter restarts at 0 (`v1.22.0-0`)
+# - otherwise the counter is incremented (`v1.22.0-1`), but only if something
 #   that actually affects the role has changed since the last release
 #
 # Determining the version from defaults/main.yml, rather than from the commit
@@ -38,8 +38,6 @@ role_defining_paths=(
 	'templates'
 )
 
-# Keyed on the literal `alloy_version` value, which is what Renovate bumps.
-# The image variables derive from it through Jinja, so they cannot be read here.
 version="$(sed -nE 's|^alloy_version:[[:space:]]*"?([^"[:space:]]+)"?.*$|\1|p' "$defaults_path" | head -n1)"
 
 if [ -z "$version" ]; then
@@ -47,9 +45,10 @@ if [ -z "$version" ]; then
 	exit 1
 fi
 
-# The version values do not carry a leading `v` (e.g. `13.0.2`), but the tags
-# do (`v13.0.2-0`). Stripping any `v` before prepending one keeps this correct
-# even if the version values ever start carrying one.
+# The version values carry the leading `v` of Alloy's image tags (e.g.
+# `v1.22.0`), and so do the tags (`v1.22.0-0`). Stripping any `v` before
+# prepending one keeps it from being doubled, and keeps this correct should the
+# `v` ever be left off.
 tag_prefix="v${version#v}-"
 
 # Of all releases of this version, the highest release number. Sorted

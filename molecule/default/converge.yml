@@ -1,15 +1,15 @@
 # SPDX-FileCopyrightText: 2026 spatterlight
-# SPDX-FileCopyrightText: 2026 sudo-Tiz
+# SPDX-FileCopyrightText: 2026 Suguru Hirahara
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 ---
-- name: Install Alloy for Molecule tests
+- name: Include roles for Alloy Molecule tests
   hosts: all
   become: true
   gather_facts: true
   tasks:
-    - name: Include dependency and Alloy roles
+    - name: Include roles for Alloy Molecule tests
       ansible.builtin.include_role:
         name: "{{ role_name }}"
         public: true
@@ -20,16 +20,16 @@
       loop_control:
         loop_var: role_name
 
-- name: Start Alloy
+- name: Ensure Alloy service is started
   hosts: all
   become: true
   gather_facts: false
   tasks:
-    - name: Reload systemd
+    - name: Ensure systemd daemon is reloaded
       ansible.builtin.systemd_service:
         daemon_reload: true
 
-    - name: Start Alloy service
+    - name: Ensure Alloy systemd service is started
       ansible.builtin.systemd_service:
         name: alloy.service
         state: started

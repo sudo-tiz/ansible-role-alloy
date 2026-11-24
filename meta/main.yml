@@ -1,9 +1,10 @@
 ---
 galaxy_info:
-  namespace: mash
-  role_name: alloy
   author: sudo-Tiz
-  description: Ansible role to install alloy, a log agent that helps collect and forward logs to a centralized logging system.
+  company: mash
+  role_name: alloy
+  namespace: mash
+  description: Alloy
   platforms:
     - name: Debian
       versions:

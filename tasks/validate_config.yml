@@ -34,8 +34,8 @@
 
 - name: Fail if additional volumes are not definition objects
   ansible.builtin.fail:
-    msg: Each additional volume must be an object with `type`, `src`, and `dst` fields.
-  when: item is not mapping or item.type is not defined or item.src is not defined or item.dst is not defined
+    msg: Each additional volume must be an object with `src` and `dst` fields; `type` is optional.
+  when: item is not mapping or item.src is not defined or item.dst is not defined
   loop: "{{ alloy_container_additional_volumes }}"
   loop_control:
     label: "{{ item.src | default('<missing>') }}"

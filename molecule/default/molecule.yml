@@ -1,5 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Slavi Pantaleev
 # SPDX-FileCopyrightText: 2026 spatterlight
-# SPDX-FileCopyrightText: 2026 sudo-Tiz
+# SPDX-FileCopyrightText: 2026 Suguru Hirahara
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -17,7 +18,12 @@ platforms:
     command: ${MOLECULE_DOCKER_COMMAND:-""}
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      # Docker inside the instance stores images via containerd. Its storage
+      # cannot use overlay on top of the instance's own overlay filesystem, so a
+      # volume puts it on a real filesystem.
       - /var/lib/containerd
+    # Remove volumes along with the instance, so that local runs do not leave
+    # gigabytes behind.
     keep_volumes: false
     cgroupns_mode: host
     privileged: true
@@ -30,27 +36,80 @@ provisioner:
   inventory:
     group_vars:
       all:
+        # Helper variables
+        alloy_debug_service_enabled: false
+        alloy_restarts_check_enabled: true
+
+        # This role configures Alloy to read logs and ship them to a Loki.
+        # Nothing about that job is observable from Alloy alone - an Alloy whose
+        # delivery never succeeds looks, from its own HTTP endpoints, exactly
+        # like one that works.
+        #
+        # So this scenario stands up a real Loki as the sink (see prepare.yml)
+        # and seeds a log file with a line that nothing else could produce.
+        # verify.yml then asks that Loki whether the line arrived, which is the
+        # one probe here that proves Alloy actually did its job.
+        #
+        # Alloy and Loki are released separately, so the sink is pinned on its
+        # own rather than derived from `alloy_version`.
+        # renovate: datasource=docker depName=grafana/loki
+        alloy_molecule_loki_container_image: docker.io/grafana/loki:3.7.6
+
+        # The container and network names carry both the role and the scenario,
+        # so that they cannot collide with another role's scenario that happens
+        # to share a Docker daemon.
+        alloy_molecule_loki_container_name: alloy-default-loki
+        alloy_molecule_network_name: alloy-default-sink
+
+        # Loki is published on the test container's own loopback, so that
+        # verify.yml can query it over HTTP.
+        alloy_molecule_loki_bind_port: 3100
+
+        # The seeded log file that Alloy is pointed at, on the host side and
+        # as bind-mounted into the container.
+        alloy_molecule_log_host_path: /alloy-molecule-logs
+        alloy_molecule_log_in_container_path: /molecule-logs
+        alloy_molecule_log_filename: seeded.log
+
+        # The line written into that file. It is deliberately unlike anything
+        # this system's own log files contain, so that finding it in Loki cannot
+        # be a coincidence.
+        alloy_molecule_log_line: MOLECULE-ALLOY-SEEDED-LINE-7d2e5c81
+
+        # The scraper becomes an Alloy component named after it
+        # (`loki.source.file.<name>`), which only this role's configuration can
+        # produce. The job label is what verify.yml queries Loki for.
+        alloy_molecule_scraper_name: molecule_seeded
+        alloy_molecule_scraper_job_name: molecule-alloy-seeded
+
+        # Variables for Alloy
         alloy_uid: 1000
         alloy_gid: 1000
         alloy_hostname: localhost
         alloy_container_labels_traefik_enabled: false
-        alloy_varlog_scraper_enabled: true
-        alloy_varlog_scraper_config_labels_job: alloy-molecule-seeded
+        alloy_container_http_host_bind_port: 12345
+
+        # The sink network is created by prepare.yml; the role only attaches to
+        # it. This is also what exercises the role's additional-networks knob.
         alloy_container_additional_networks_custom:
           - "{{ alloy_molecule_network_name }}"
+
+        # Gives the container the seeded log file to read.
+        alloy_container_additional_volumes_custom:
+          - {"type": "bind", "src": "{{ alloy_molecule_log_host_path }}", "dst": "{{ alloy_molecule_log_in_container_path }}", "options": "readonly"}
+
         alloy_config_clients_custom:
           - url: "http://{{ alloy_molecule_loki_container_name }}:3100/loki/api/v1/push"
 
-        # A distinct line in a mounted file proves delivery end-to-end to Loki.
-        # renovate: datasource=docker depName=grafana/loki
-        alloy_molecule_loki_container_image: docker.io/grafana/loki:3.7.6
-        alloy_molecule_loki_container_name: alloy-default-loki
-        alloy_molecule_network_name: alloy-default-sink
-        alloy_molecule_loki_bind_port: 3100
-        alloy_molecule_log_host_path: /var/log/alloy-molecule
-        alloy_molecule_log_filename: seeded.log
-        alloy_molecule_log_line: ALLOY-MOLECULE-SEEDED-LINE-a4d17c
+        alloy_varlog_scrapers_custom:
+          - name: "{{ alloy_molecule_scraper_name }}"
+            path: "{{ alloy_molecule_log_in_container_path }}/*.log"
+            labels:
+              job: "{{ alloy_molecule_scraper_job_name }}"
+            sync_period: 10s
+            forward_to: ['loki.write.default.receiver']
   env:
+    # Workaround for https://github.com/ansible/molecule/issues/4391
     ANSIBLE_ROLES_PATH: ${MOLECULE_PROJECT_DIRECTORY}/..:/.ansible/roles:/usr/share/ansible/roles:/etc/ansible/roles:~/.ansible/roles
 verifier:
   name: ansible

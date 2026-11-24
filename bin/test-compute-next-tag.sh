@@ -29,11 +29,10 @@ cleanup() {
 
 trap cleanup EXIT
 
-# The defaults fixture mirrors the shape of the real defaults/main.yml: the
-# Renovate annotation sits directly above the version, and the container image
-# variables below it derive from the version through Jinja. Only the literal
-# `alloy_version` value may be picked up - a script keying on the derived
-# variables would read `{{ alloy_version }}` and produce nonsense tags.
+# The fixture mirrors the shape of the real defaults/main.yml: the Renovate
+# annotation sits directly above the version, and other variables derive from
+# it further down. Both are what the script has to read past to key on the leaf
+# literal alone.
 write_defaults() {
 	cat > defaults/main.yml <<-EOF
 		# renovate: datasource=docker depName=grafana/alloy versioning=semver
@@ -44,8 +43,8 @@ write_defaults() {
 	EOF
 }
 
-# Starts a scenario with a repository at Alloy 11.6.5 which has already
-# seen two releases of it (v11.6.5-0 and v11.6.5-1).
+# Starts a scenario with a repository at Alloy 1.22.0 which has already
+# seen two releases of it (v1.22.0-0 and v1.22.0-1).
 scenario() {
 	echo "$1"
 
@@ -61,9 +60,9 @@ scenario() {
 	git config user.name 'Test'
 	git config commit.gpgsign false
 
-	write_defaults 11.6.5
+	write_defaults v1.22.0
 	printf 'placeholder\n' > tasks/main.yml
-	printf 'placeholder\n' > templates/config.alloy.j2
+	printf 'placeholder\n' > templates/env.j2
 	printf 'placeholder\n' > README.md
 
 	git add -A
@@ -71,7 +70,7 @@ scenario() {
 
 	local release_number
 	for release_number in 0 1; do
-		git tag "v11.6.5-$release_number"
+		git tag "v1.22.0-$release_number"
 	done
 }
 
@@ -104,10 +103,11 @@ expect() {
 	fi
 }
 
-bump_version='write_defaults 13.0.2'
-revert_version='write_defaults 11.6.5'
+bump_version='write_defaults v1.23.0'
+revert_version='write_defaults v1.22.0'
+unprefixed_version='write_defaults 1.23.0'
 edit_task="printf 'a task\n' >> tasks/main.yml"
-edit_template="printf 'a line\n' >> templates/config.alloy.j2"
+edit_template="printf 'a line\n' >> templates/env.j2"
 edit_readme="printf 'documentation\n' >> README.md"
 edit_script="printf '# a comment\n' >> bin/compute-next-tag.sh"
 
@@ -115,39 +115,43 @@ edit_script="printf '# a comment\n' >> bin/compute-next-tag.sh"
 # every update released exactly once, whichever order they arrive in.
 
 scenario 'A version bump merged before other role changes'
-expect 'version bump' v13.0.2-0 "$(merge "$bump_version")"
-expect 'task edit'    v13.0.2-1 "$(merge "$edit_task")"
-expect 'template'     v13.0.2-2 "$(merge "$edit_template")"
+expect 'version bump' v1.23.0-0 "$(merge "$bump_version")"
+expect 'task edit'    v1.23.0-1 "$(merge "$edit_task")"
+expect 'template'     v1.23.0-2 "$(merge "$edit_template")"
 
 scenario 'A version bump merged after other role changes'
-expect 'task edit'    v11.6.5-2 "$(merge "$edit_task")"
-expect 'version bump' v13.0.2-0 "$(merge "$bump_version")"
+expect 'task edit'    v1.22.0-2 "$(merge "$edit_task")"
+expect 'version bump' v1.23.0-0 "$(merge "$bump_version")"
 
 scenario 'Commits that do not affect the role'
-expect 'README'   ''         "$(merge "$edit_readme")"
-expect 'a script' ''         "$(merge "$edit_script")"
-expect 'a task'   v11.6.5-2  "$(merge "$edit_task")"
+expect 'README'   ''        "$(merge "$edit_readme")"
+expect 'a script' ''        "$(merge "$edit_script")"
+expect 'a task'   v1.22.0-2 "$(merge "$edit_task")"
 
 scenario 'Release numbers past 9'
 for release_number in 2 3 4 5 6 7 8 9 10; do
-	git tag "v11.6.5-$release_number"
+	git tag "v1.22.0-$release_number"
 done
-expect 'a task' v11.6.5-11 "$(merge "$edit_task")"
+expect 'a task' v1.22.0-11 "$(merge "$edit_task")"
 
 scenario 'Reverting to an already released version'
 merge "$bump_version" > /dev/null
-# The role is now identical to what v11.6.5-1 already published, so there is
+# The role is now identical to what v1.22.0-1 already published, so there is
 # nothing new to release.
-expect 'a revert' '' "$(merge "$revert_version")"
+expect 'a revert' ''        "$(merge "$revert_version")"
 
 scenario 'Reverting to an already released version, with a change'
 merge "$bump_version" > /dev/null
-expect 'a revert' v11.6.5-2 "$(merge "$revert_version && $edit_task")"
+expect 'a revert' v1.22.0-2 "$(merge "$revert_version && $edit_task")"
 
-# The version variable is quoted in some roles and bare in others, and the
-# derived image variables must never be mistaken for it.
-scenario 'A quoted version value'
-expect 'quoted bump' v13.0.2-0 "$(merge 'printf "%s\n" "# renovate: datasource=docker depName=grafana/alloy versioning=semver" "alloy_version: \"13.0.2\"" "alloy_container_image_tag: \"{{ alloy_version }}\"" > defaults/main.yml')"
+scenario 'A version value without a leading v still gets one in the tag'
+expect 'version bump' v1.23.0-0 "$(merge "$unprefixed_version")"
+
+# The version is read from the leaf literal, never from a variable that derives
+# from it. The fixture's `alloy_container_image_tag` holds a Jinja reference
+# to `alloy_version`, which must not be mistaken for a version value.
+scenario 'A derived variable is not mistaken for the version'
+expect 'task edit' v1.22.0-2 "$(merge "$edit_task")"
 
 if [ "$failures" -gt 0 ]; then
 	echo >&2 "$failures scenario(s) behaved unexpectedly"
