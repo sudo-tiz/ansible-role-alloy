@@ -29,7 +29,19 @@ alloy_journald_scraper_enabled: true
 alloy_varlog_scraper_enabled: true
 ```
 
-The journal scraper keeps all systemd units by default, except Alloy itself. Set `alloy_journald_scraper_config_relabel_configs_keep_regex` to an allowlist when only selected units should be collected. The file scraper matches files under `/var/log` ending in `log` by default; adjust `alloy_varlog_scraper_config_labels_path` for a narrower or broader glob.
+The journal scraper keeps all systemd units by default, except Alloy itself. Set `alloy_journald_scraper_config_relabel_configs_keep_regex` to an allowlist when only selected units should be collected. The file scraper matches files under `/var/log` ending in `log` by default, excluding `lastlog` and `faillog`; adjust `alloy_varlog_scraper_config_labels_path` for a narrower or broader glob. Custom scraper names must be Alloy identifiers: begin with a letter or underscore, then use only letters, digits, or underscores.
+
+Custom container mounts use Docker `--mount` definition objects:
+
+```yaml
+alloy_container_additional_volumes_custom:
+  - type: bind
+    src: /host/path
+    dst: /container/path
+    options: readonly
+```
+
+Pass extra `alloy run` arguments through `alloy_process_extra_arguments_custom`.
 
 Collected logs can contain credentials or personal data. Limit sources and labels, protect the Loki endpoint, and choose a retention period appropriate for the data.
 

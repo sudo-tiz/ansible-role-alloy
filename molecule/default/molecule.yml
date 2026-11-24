@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: 2026 spatterlight
+# SPDX-FileCopyrightText: 2026 sudo-Tiz
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+dependency:
+  name: galaxy
+  options:
+    requirements-file: requirements.yml
+    force: true
+driver:
+  name: docker
+platforms:
+  - name: alloy-${MOLECULE_DISTRO:-ubuntu2604}-default
+    image: "geerlingguy/docker-${MOLECULE_DISTRO:-ubuntu2604}-ansible:latest"
+    command: ${MOLECULE_DOCKER_COMMAND:-""}
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - /var/lib/containerd
+    keep_volumes: false
+    cgroupns_mode: host
+    privileged: true
+    pre_build_image: true
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      callback_result_format: yaml
+  inventory:
+    group_vars:
+      all:
+        alloy_uid: 1000
+        alloy_gid: 1000
+        alloy_hostname: localhost
+        alloy_container_labels_traefik_enabled: false
+        alloy_varlog_scraper_enabled: true
+        alloy_varlog_scraper_config_labels_job: alloy-molecule-seeded
+        alloy_container_additional_networks_custom:
+          - "{{ alloy_molecule_network_name }}"
+        alloy_config_clients_custom:
+          - url: "http://{{ alloy_molecule_loki_container_name }}:3100/loki/api/v1/push"
+
+        # A distinct line in a mounted file proves delivery end-to-end to Loki.
+        # renovate: datasource=docker depName=grafana/loki
+        alloy_molecule_loki_container_image: docker.io/grafana/loki:3.7.6
+        alloy_molecule_loki_container_name: alloy-default-loki
+        alloy_molecule_network_name: alloy-default-sink
+        alloy_molecule_loki_bind_port: 3100
+        alloy_molecule_log_host_path: /var/log/alloy-molecule
+        alloy_molecule_log_filename: seeded.log
+        alloy_molecule_log_line: ALLOY-MOLECULE-SEEDED-LINE-a4d17c
+  env:
+    ANSIBLE_ROLES_PATH: ${MOLECULE_PROJECT_DIRECTORY}/..:/.ansible/roles:/usr/share/ansible/roles:/etc/ansible/roles:~/.ansible/roles
+verifier:
+  name: ansible

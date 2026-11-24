@@ -18,7 +18,7 @@ alloy_config_path: "{{ alloy_base_path }}/config"
 alloy_data_path: "{{ alloy_base_path }}/data"
 
 # renovate: datasource=docker depName=grafana/alloy versioning=semver
-alloy_version: 1.18.0
+alloy_version: v1.22.0
 
 alloy_uid: ""
 alloy_gid: ""
@@ -110,26 +110,6 @@ alloy_container_labels_traefik_metrics_traefik_middleware_basic_auth_enabled: fa
 # See: https://doc.traefik.io/traefik/reference/routing-configuration/http/middlewares/basicauth/
 alloy_container_labels_traefik_metrics_traefik_middleware_basic_auth_users: ""
 
-# Controls which additional headers to attach to all HTTP requests.
-# To add your own custom request headers, use `alloy_container_labels_traefik_additional_request_headers_custom`
-alloy_container_labels_traefik_additional_request_headers: "{{ alloy_container_labels_traefik_additional_request_headers_auto | combine(alloy_container_labels_traefik_additional_request_headers_custom) }}"
-alloy_container_labels_traefik_additional_request_headers_auto: {}
-alloy_container_labels_traefik_additional_request_headers_custom: {}
-
-# Controls which additional headers to attach to all HTTP responses.
-# To add your own custom response headers, use `alloy_container_labels_traefik_additional_response_headers_custom`
-alloy_container_labels_traefik_additional_response_headers: "{{ alloy_container_labels_traefik_additional_response_headers_auto | combine(alloy_container_labels_traefik_additional_response_headers_custom) }}"
-alloy_container_labels_traefik_additional_response_headers_auto: |
-  {{
-    {}
-    | combine ({'X-XSS-Protection': alloy_http_header_xss_protection} if alloy_http_header_xss_protection else {})
-    | combine ({'X-Content-Type-Options': alloy_http_header_content_type_options} if alloy_http_header_content_type_options else {})
-    | combine ({'Content-Security-Policy': alloy_http_header_content_security_policy} if alloy_http_header_content_security_policy else {})
-    | combine ({'Permissions-Policy': alloy_http_header_permissions_policy} if alloy_http_header_permissions_policy else {})
-    | combine ({'Strict-Transport-Security': alloy_http_header_strict_transport_security} if alloy_http_header_strict_transport_security and alloy_container_labels_traefik_tls else {})
-  }}
-alloy_container_labels_traefik_additional_response_headers_custom: {}
-
 # alloy_container_labels_additional_labels contains a multiline string with additional labels to add to the container label file.
 # See `../templates/labels.j2` for details.
 # To add your own custom labels, use `alloy_container_labels_additional_labels_custom`
@@ -146,53 +126,6 @@ alloy_container_labels_additional_labels_custom: []
 alloy_container_extra_arguments: "{{ alloy_container_extra_arguments_auto + alloy_container_extra_arguments_custom }}"
 alloy_container_extra_arguments_auto: []
 alloy_container_extra_arguments_custom: []
-
-# Specifies the value of the `X-XSS-Protection` header
-# Stops pages from loading when they detect reflected cross-site scripting (XSS) attacks.
-#
-# Learn more about it is here:
-# - https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-XSS-Protection
-# - https://portswigger.net/web-security/cross-site-scripting/reflected
-alloy_http_header_xss_protection: "1; mode=block"
-
-# Specifies the value of the `X-Content-Type-Options` header.
-# See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Content-Type-Options
-alloy_http_header_content_type_options: nosniff
-
-# Specifies the value of the `Content-Security-Policy` header.
-# See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy
-alloy_http_header_content_security_policy: frame-ancestors 'self'
-
-# Specifies the value of the `Permissions-Policy` header.
-# See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Permissions-Policy
-alloy_http_header_permissions_policy: "{{ 'interest-cohort=()' if alloy_floc_optout_enabled else '' }}"
-
-# Specifies the value of the `Strict-Transport-Security` header.
-# See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Strict-Transport-Security
-alloy_http_header_strict_transport_security: "max-age=31536000; includeSubDomains{{ '; preload' if alloy_hsts_preload_enabled else '' }}"
-
-# Controls whether to send a "Permissions-Policy interest-cohort=();" header along with all responses
-#
-# Learn more about what it is here:
-# - https://www.eff.org/deeplinks/2021/03/googles-floc-terrible-idea
-# - https://paramdeo.com/blog/opting-your-website-out-of-googles-floc-network
-# - https://amifloced.org/
-#
-# Of course, a better solution is to just stop using browsers (like Chrome), which participate in such tracking practices.
-# See: `alloy_http_header_permissions_policy`
-alloy_floc_optout_enabled: true
-
-# Controls if HSTS preloading is enabled
-#
-# In its strongest and recommended form, the [HSTS policy](https://www.chromium.org/hsts) includes all subdomains, and
-# indicates a willingness to be "preloaded" into browsers:
-# `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
-# For more information visit:
-# - https://en.wikipedia.org/wiki/HTTP_Strict_Transport_Security
-# - https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Strict-Transport-Security
-# - https://hstspreload.org/#opt-in
-# See: `alloy_http_header_strict_transport_security`
-alloy_hsts_preload_enabled: false
 
 # List of systemd services that the Alloy systemd service depends on
 alloy_systemd_required_services_list: "{{ alloy_systemd_required_services_list_default + alloy_systemd_required_services_list_auto + alloy_systemd_required_services_list_custom }}"
@@ -303,11 +236,11 @@ alloy_config_logging_format: logfmt
 # A list of extra arguments to pass to the `alloy run` command (as opposed to `alloy_container_extra_arguments`,
 # which passes extra arguments to the `docker create` command).
 #
-# Example: alloy_container_run_extra_arguments_custom: ["--stability.level=public-preview"]
-alloy_container_run_extra_arguments: "{{ alloy_container_run_extra_arguments_default + alloy_container_run_extra_arguments_auto + alloy_container_run_extra_arguments_custom }}"
-alloy_container_run_extra_arguments_default: []
-alloy_container_run_extra_arguments_auto: []
-alloy_container_run_extra_arguments_custom: []
+# Example: alloy_process_extra_arguments_custom: ["--stability.level=public-preview"]
+alloy_process_extra_arguments: "{{ alloy_process_extra_arguments_default + alloy_process_extra_arguments_auto + alloy_process_extra_arguments_custom }}"
+alloy_process_extra_arguments_default: []
+alloy_process_extra_arguments_auto: []
+alloy_process_extra_arguments_custom: []
 
 # Specify the timezone
 alloy_environment_variables_tz: UTC
@@ -340,8 +273,14 @@ alloy_journald_scraper_host_path: /var/log/journal
 alloy_journald_scraper_in_container_path: /journal
 
 alloy_journald_scraper_container_additional_volumes:
-  - "type=bind,source={{ alloy_journald_scraper_host_path }},target={{ alloy_journald_scraper_in_container_path }},ro"
-  - "type=bind,source=/etc/machine-id,target=/etc/machine-id,ro"
+  - type: bind
+    src: "{{ alloy_journald_scraper_host_path }}"
+    dst: "{{ alloy_journald_scraper_in_container_path }}"
+    options: readonly
+  - type: bind
+    src: /etc/machine-id
+    dst: /etc/machine-id
+    options: readonly
 
 alloy_journald_scraper_config_journal_json: false
 alloy_journald_scraper_config_journal_max_age: 12h
@@ -376,8 +315,9 @@ alloy_journald_scraper_config_matches: ""
 # entries with different `matches`/labels/relabeling/destination via `alloy_journald_scrapers_custom`, without
 # having to redefine the whole configuration.
 #
+# Scraper names must be valid Alloy identifiers: letters, digits, or underscores; not starting with a digit.
 # Each item supports the following keys:
-# - name: a unique identifier for this scraper (used as the Alloy component label)
+# - name: a unique Alloy identifier for this scraper
 # - json: whether journal entries should be forwarded as JSON (boolean)
 # - max_age: the oldest relative time from which entries should be read
 # - path: the in-container path to the mounted systemd journal directory
@@ -441,10 +381,14 @@ alloy_varlog_scraper_host_path: /var/log
 alloy_varlog_scraper_in_container_path: /varlog
 
 alloy_varlog_scraper_container_additional_volumes:
-  - "type=bind,source={{ alloy_varlog_scraper_host_path }},target={{ alloy_varlog_scraper_in_container_path }},ro"
+  - type: bind
+    src: "{{ alloy_varlog_scraper_host_path }}"
+    dst: "{{ alloy_varlog_scraper_in_container_path }}"
+    options: readonly
 
 alloy_varlog_scraper_config_labels_path: "{{ alloy_varlog_scraper_in_container_path }}{{ alloy_varlog_scraper_config_labels_path_suffix }}"
 alloy_varlog_scraper_config_labels_path_suffix: /**/*log
+alloy_varlog_scraper_config_exclude_path: "{{ alloy_varlog_scraper_in_container_path }}/**/{faillog,lastlog}"
 alloy_varlog_scraper_config_labels_job: varlog
 alloy_varlog_scraper_config_labels_host: "{{ inventory_hostname }}"
 
@@ -456,9 +400,11 @@ alloy_varlog_scraper_config_sync_period: 10s
 # so adding more entries (e.g. to scan a different sub-directory/glob pattern with different labels or a different
 # destination) via `alloy_varlog_scrapers_custom` doesn't require any additional mounts.
 #
+# Scraper names must be valid Alloy identifiers: letters, digits, or underscores; not starting with a digit.
 # Each item supports the following keys:
-# - name: a unique identifier for this scraper (used as the Alloy component label)
+# - name: a unique Alloy identifier for this scraper
 # - path: the in-container glob path to scan (e.g. `{{ alloy_varlog_scraper_in_container_path }}/nginx/*.log`)
+# - exclude_path: optional in-container glob for paths to exclude (defaults to excluding `lastlog` and `faillog`)
 # - labels: a dictionary of static labels to attach (e.g. `{job: "nginx", host: "{{ inventory_hostname }}"}`)
 # - sync_period: how often to re-sync the filesystem for this scraper
 # - forward_to: a list of raw Alloy component reference expressions to forward log entries to
@@ -478,6 +424,7 @@ alloy_varlog_scrapers_default: |
     ([{
       'name': 'varlog',
       'path': alloy_varlog_scraper_config_labels_path,
+      'exclude_path': alloy_varlog_scraper_config_exclude_path,
       'labels': {'job': alloy_varlog_scraper_config_labels_job, 'host': alloy_varlog_scraper_config_labels_host},
       'sync_period': alloy_varlog_scraper_config_sync_period,
       'forward_to': ['loki.write.default.receiver'],

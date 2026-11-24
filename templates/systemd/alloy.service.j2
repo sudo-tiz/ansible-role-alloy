@@ -46,7 +46,7 @@ ExecStartPre={{ devture_systemd_docker_base_host_command_docker }} create \
       --mount type=bind,src={{ alloy_config_path }},dst=/etc/alloy,ro \
       --mount type=bind,src={{ alloy_data_path }},dst=/data \
       {% for mount in alloy_container_additional_volumes %}
-      --mount {{ mount }} \
+      --mount type={{ mount.type }},src={{ mount.src }},dst={{ mount.dst }}{% if mount.options | default('') %},{{ mount.options }}{% endif %} \
       {% endfor %}
       {% for arg in alloy_container_extra_arguments %}
       {{ arg }} \
@@ -56,7 +56,7 @@ ExecStartPre={{ devture_systemd_docker_base_host_command_docker }} create \
       --server.http.listen-addr=0.0.0.0:{{ alloy_config_http_listen_port }} \
       --server.http.ui-path-prefix={{ alloy_path_prefix }} \
       --storage.path=/data \
-      {% for arg in alloy_container_run_extra_arguments %}
+      {% for arg in alloy_process_extra_arguments %}
       {{ arg }} \
       {% endfor %}
       /etc/alloy/config.alloy

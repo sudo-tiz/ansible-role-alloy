@@ -1,0 +1,72 @@
+# SPDX-FileCopyrightText: 2026 Slavi Pantaleev
+# SPDX-FileCopyrightText: 2026 sudo-Tiz
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+- name: Prepare Alloy Molecule test
+  hosts: all
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 600
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Install Docker Python dependencies
+      ansible.builtin.package:
+        name:
+          - python3-docker
+          - python3-requests
+        state: present
+
+    - name: Install Docker
+      ansible.builtin.include_role:
+        name: ansible-role-docker
+
+    - name: Create the seeded log directory
+      ansible.builtin.file:
+        path: "{{ alloy_molecule_log_host_path }}"
+        state: directory
+        mode: "0755"
+
+    - name: Seed the log file
+      ansible.builtin.copy:
+        dest: "{{ alloy_molecule_log_host_path }}/{{ alloy_molecule_log_filename }}"
+        content: "{{ alloy_molecule_log_line }} written by prepare.yml\n"
+        mode: "0644"
+
+    - name: Create the Loki sink network
+      ansible.builtin.command:
+        cmd: "docker network create {{ alloy_molecule_network_name }}"
+      register: alloy_molecule_network
+      changed_when: alloy_molecule_network.rc == 0
+      failed_when: alloy_molecule_network.rc != 0 and 'already exists' not in alloy_molecule_network.stderr
+
+    - name: Remove a previous Loki container
+      ansible.builtin.command:
+        cmd: "docker rm --force {{ alloy_molecule_loki_container_name }}"
+      changed_when: false
+      failed_when: false
+
+    - name: Start Loki sink
+      ansible.builtin.command:
+        cmd: >-
+          docker run -d
+          --name {{ alloy_molecule_loki_container_name }}
+          --network {{ alloy_molecule_network_name }}
+          -p 127.0.0.1:{{ alloy_molecule_loki_bind_port }}:3100
+          {{ alloy_molecule_loki_container_image }}
+      changed_when: true
+
+    - name: Wait for Loki readiness
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ alloy_molecule_loki_bind_port }}/ready"
+        method: GET
+        status_code: [200]
+      register: alloy_molecule_loki_ready
+      until: alloy_molecule_loki_ready.status == 200
+      retries: 60
+      delay: 5

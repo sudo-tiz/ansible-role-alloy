@@ -1,0 +1,53 @@
+# SPDX-FileCopyrightText: 2026 Slavi Pantaleev
+# SPDX-FileCopyrightText: 2026 sudo-Tiz
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+- name: Verify Alloy delivered the seeded log to Loki
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Verify that Alloy delivered the log
+      block:
+        - name: Wait for the seeded line to arrive in Loki
+          ansible.builtin.uri:
+            url: >-
+              http://127.0.0.1:{{ alloy_molecule_loki_bind_port }}/loki/api/v1/query_range?limit=100&query={{
+                ('{job="' ~ alloy_varlog_scraper_config_labels_job ~ '"}') | urlencode
+              }}
+            method: GET
+            return_content: true
+          register: alloy_molecule_loki_query
+          until: >-
+            alloy_molecule_log_line in (
+              alloy_molecule_loki_query.json.data.result | default([])
+              | map(attribute='values') | flatten | join(' ')
+            )
+          retries: 36
+          delay: 5
+
+        - name: Assert Loki received the seeded line under the configured job label
+          ansible.builtin.assert:
+            that:
+              - alloy_molecule_loki_query.json.status == 'success'
+              - alloy_molecule_log_line in (alloy_molecule_loki_query.json.data.result | map(attribute='values') | flatten | join(' '))
+              - (alloy_molecule_loki_query.json.data.result | map(attribute='stream.job') | first) == alloy_varlog_scraper_config_labels_job
+            fail_msg: "The seeded log line did not reach Loki"
+            success_msg: "Alloy shipped the seeded log line to Loki"
+
+      rescue:
+        - name: Retrieve Alloy service log
+          ansible.builtin.command:
+            cmd: journalctl --no-pager --output=cat --unit=alloy.service
+          register: alloy_molecule_service_log
+          changed_when: false
+
+        - name: Show Alloy service log
+          ansible.builtin.debug:
+            var: alloy_molecule_service_log.stdout_lines
+
+        - name: Fail verification
+          ansible.builtin.fail:
+            msg: "Alloy failed to deliver the seeded log line."

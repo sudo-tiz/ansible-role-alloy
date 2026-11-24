@@ -29,7 +29,7 @@ loki.write "default" {
 {% if client.headers is defined and client.headers %}
     headers = {
 {% for key, value in client.headers.items() %}
-      {{ key }} = {{ value | to_json }},
+      {{ key | to_json }} = {{ value | to_json }},
 {% endfor %}
     }
 {% endif %}
@@ -134,6 +134,7 @@ loki.source.file "{{ scraper.name }}" {
   targets = [
     {
       __path__ = {{ scraper.path | to_json }},
+      __path_exclude__ = {{ scraper.exclude_path | default(alloy_varlog_scraper_config_exclude_path) | to_json }},
 {% for key, value in scraper.labels.items() %}
       {{ key }} = {{ value | to_json }},
 {% endfor %}

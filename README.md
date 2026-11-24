@@ -31,3 +31,5 @@ To install the hook, run the [`just`](https://github.com/casey/just) command bel
 ```sh
 just prek-install-git-pre-commit-hook
 ```
+
+See [`molecule/README.md`](molecule/README.md) for the end-to-end test that verifies a seeded log reaches Loki.

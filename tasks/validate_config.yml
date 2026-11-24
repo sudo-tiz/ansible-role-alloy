@@ -22,6 +22,24 @@
       See `alloy_config_clients_custom`.
   when: "alloy_config_clients | length == 0"
 
+- name: Fail if scraper names are not valid Alloy identifiers
+  ansible.builtin.fail:
+    msg: >-
+      Scraper name `{{ item.name | default('') }}` must start with a letter or underscore,
+      then contain only letters, digits, or underscores.
+  when: (item.name | default('') | string) is not match('^[A-Za-z_][A-Za-z0-9_]*$')
+  loop: "{{ alloy_journald_scrapers + alloy_varlog_scrapers }}"
+  loop_control:
+    label: "{{ item.name | default('<missing>') }}"
+
+- name: Fail if additional volumes are not definition objects
+  ansible.builtin.fail:
+    msg: Each additional volume must be an object with `type`, `src`, and `dst` fields.
+  when: item is not mapping or item.type is not defined or item.src is not defined or item.dst is not defined
+  loop: "{{ alloy_container_additional_volumes }}"
+  loop_control:
+    label: "{{ item.src | default('<missing>') }}"
+
 - name: Run if Traefik is enabled
   when: alloy_container_labels_traefik_enabled | bool
   block:
